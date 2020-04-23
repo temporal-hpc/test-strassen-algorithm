@@ -5,9 +5,9 @@ Requeriments:
 	-gcc(code tested on 9.3.0)
 
 How to compile/run:
-	gcc -O3 strassen.c -o strassen
+	gcc -O3 strassen.c -o strassen\n
 	./strassen x 
 where x is 2^n, n>=2
 
-Example:
+Example:\n
 	./strassen 2048
