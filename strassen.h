@@ -1,63 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
-
-#define MATRIX_WIDTH 1024
-#define ll long long
-
-int getMove(){
-    int ret = 0, sup=MATRIX_WIDTH;
-    while(sup/2>=2){
-        sup= sup/2;
-        ret++;
-    }
-    return ret;
-}
-
-void printMatrix(int *M, int elements, int width){
-    for(int i = 0; i < elements; ++i){
-        printf("%f ", M[i]);
-        if((i+1)%width == 0 && i>0) printf("\n");
-    }
-}
-
-void fillElements(int *M, int elements){
-    for(int i = 0; i < elements; ++i){
-        M[i] = (i + 1)%5;   
-    }
-}
-void AddMatrix(int *A, int *B, int *C, int size){
-    for(int i = 0; i < size; ++i){
-        C[i] = A[i] + B[i];
-    }
-    
-}
-
-void SubstractionMatrix(int *A, int *B, int *C, int size){
-    for(int i = 0; i < size; ++i){
-        C[i] = A[i] - B[i];
-    }
-}
-
-void MatmulMatrix(int *A, int *B, int *C, int width){
-    for (int i = 0; i < width; ++i){   
-        for (int j = 0; j < width; ++j){
-            for (int k = 0; k < width; ++k){
-                C[width*j + i] += A[width*j + k] * B[width*k + i];
-            }
-        }
-    }
-}
-
-float VerifyResults(int *A, int *B, ll size){
-    int total = 0;
-    for(ll i = 0; i < size; ++i){
-        if(A[i] == B[i]) total++;
-    }   
-    return total;
-}
-
+#pragma once
 void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
     //printf("ELEMENTS: %i, REGION(%i,%i), MOVE %i\n", elements, wi, wj, move_index);
     
@@ -107,7 +48,6 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         int *secondMatrix = (int *)malloc(size*sizeof(int));
         //auxiliar count to fill the submatrix
         int count = 0;
-        //printMatrix(A,elements,old_width);
         //build submatrix
         for(int i = 0; i < width; ++i){
             for(int j = 0; j < width; ++j){
@@ -149,12 +89,12 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
 
         //Third call
         //m3 = a11(b12 - b22)
-        SubstractionMatrix(b12, b22, firstMatrix, size);
+        SubMatrix(b12, b22, firstMatrix, size);
         StrassenAlgorithm(a11, firstMatrix, m3, size, width);
 
         //Fourth call
         //m4 = a22(b21 - b11)
-        SubstractionMatrix(b21, b11, firstMatrix, size);
+        SubMatrix(b21, b11, firstMatrix, size);
         StrassenAlgorithm(a22, firstMatrix, m4, size, width);
 
         //Fifth call
@@ -164,13 +104,13 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
 
         //Sixth call
         //m6 = (a21 - a11)(b11 + b12)
-        SubstractionMatrix(a21, a11, firstMatrix, size);
+        SubMatrix(a21, a11, firstMatrix, size);
         AddMatrix(b11, b12, secondMatrix, size);
         StrassenAlgorithm(firstMatrix, secondMatrix, m6, size, width);
 
         //Seventh call
         //m7 = (a12 - a22)(b21 + b22)
-        SubstractionMatrix(a12, a22, firstMatrix, size);
+        SubMatrix(a12, a22, firstMatrix, size);
         AddMatrix(b21, b22, secondMatrix, size);
         StrassenAlgorithm(firstMatrix, secondMatrix, m7, size, width);
 
@@ -186,7 +126,7 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         //Apply m's matrix to c submatrix
         //c11 = m1 + m4 - m5 + m7
         AddMatrix(m1, m4, firstMatrix, size);
-        SubstractionMatrix(firstMatrix, m5, secondMatrix, size);
+        SubMatrix(firstMatrix, m5, secondMatrix, size);
         AddMatrix(secondMatrix, m7, c11, size);
 
         //c12 = m3 + m5
@@ -196,20 +136,20 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         AddMatrix(m2 , m4, c21, size);
 
         //c22 = m1 - m2 + m3 + m6
-        SubstractionMatrix(m1, m2, firstMatrix, size);
+        SubMatrix(m1, m2, firstMatrix, size);
         AddMatrix(firstMatrix, m3, secondMatrix, size);        
         AddMatrix(secondMatrix, m6, c22, size);
         
         
-        free(m1);
-        free(m2);
-        free(m3);
-        free(m4);
-        free(m5);
-        free(m6);
-        free(m7);
-        free(firstMatrix);
-        free(secondMatrix);
+        //free(m1);
+        //free(m2);
+        //free(m3);
+        //free(m4);
+        //free(m5);
+        //free(m6);
+        //free(m7);
+        //free(firstMatrix);
+        //free(secondMatrix);
 
 
         //printf("\n");
@@ -250,41 +190,4 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
     }
     
 
-}
-
-int main(int argc, char **argv)
-{
-    int width = atoi(argv[1]);
-    int total = width * width;
-    clock_t timer;
-    int *matrix_A = (int *)malloc(total * sizeof(int));
-    int *matrix_B = (int *)malloc(total * sizeof(int));
-    int *matrix_CStr = (int *)malloc(total * sizeof(int));
-    int *matrix_CNor = (int *)malloc(total * sizeof(int));
-    printf("Fill matrix\n");
-    fillElements(matrix_A, total);
-    fillElements(matrix_B, total);
-    int move = getMove();
-    //printf("move %i\n\n", move);
-
-    //printMatrix(matrix_A, total, MATRIX_WIDTH);
-    //printf("\n\n");
-    //printMatrix(matrix_B, total, MATRIX_WIDTH);
-    //printf("\n\n");
-    printf("Begin compute\n");
-    timer = clock();
-    StrassenAlgorithm(matrix_A, matrix_B, matrix_CStr, total, width);
-    timer = clock() - timer;
-    printf("\n\nStrassen Algorithm matmul execution time: %f\n", ((double)timer)/CLOCKS_PER_SEC);
-    //printMatrix(matrix_CStr, total, width);
-    timer = clock();
-    MatmulMatrix(matrix_A,matrix_B, matrix_CNor, width);
-    timer = clock() - timer;
-    printf("\n\nNormal algorithm matmul execution time: %f\n", ((double)timer)/CLOCKS_PER_SEC);
-    //printMatrix(matrix_CNor, total, width);
-    printf("Accuracy Strassen/Normal: %f\n", VerifyResults(matrix_CStr, matrix_CNor, total)/total*100);
-    free(matrix_A);
-    free(matrix_B);
-    free(matrix_CStr);
-    free(matrix_CNor);
 }

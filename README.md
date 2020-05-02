@@ -6,10 +6,11 @@ gcc(code tested on 9.3.0)
 
 How to compile/run:
 
+Run 'make', or
 gcc -O3 strassen.c -o strassen
-./strassen x 
+./strassen n
 
-where x is 2^n, n>=2
+where matrix is n x n, with n>=2
 
 Example:
 
