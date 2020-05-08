@@ -67,14 +67,6 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
             }
         }
 
-        //printMatrix(a11,size,width);
-        //printf("\n\n");
-        //printMatrix(a12,size,width);
-        //printf("\n\n");
-        //printMatrix(a21,size,width);
-        //printf("\n\n");
-        //printMatrix(a22,size,width);
-        //printf("\n\n");
         //Seven calls of Strassen
         //First call
         //m1 = (a11 + a22)(b11 + b22)
@@ -114,14 +106,14 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         AddMatrix(b21, b22, secondMatrix, size);
         StrassenAlgorithm(firstMatrix, secondMatrix, m7, size, width);
 
-        //free(a11);
-        //free(a12);
-        //free(a21);
-        //free(a22);
-        //free(b11);
-        //free(b12);
-        //free(b21);
-        //free(b22);
+        free(a11);
+        free(a12);
+        free(a21);
+        free(a22);
+        free(b11);
+        free(b12);
+        free(b21);
+        free(b22);
 
         //Apply m's matrix to c submatrix
         //c11 = m1 + m4 - m5 + m7
@@ -141,26 +133,15 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         AddMatrix(secondMatrix, m6, c22, size);
         
         
-        //free(m1);
-        //free(m2);
-        //free(m3);
-        //free(m4);
-        //free(m5);
-        //free(m6);
-        //free(m7);
-        //free(firstMatrix);
-        //free(secondMatrix);
-
-
-        //printf("\n");
-        //printMatrix(c11, size, width);
-        //printf("\n");
-        //printMatrix(c12, size, width);
-        //printf("\n");
-        //printMatrix(c21, size, width);
-        //printf("\n");
-        //printMatrix(c22, size, width);
-        //printf("\n");
+        free(m1);
+        free(m2);
+        free(m3);
+        free(m4);
+        free(m5);
+        free(m6);
+        free(m7);
+        free(firstMatrix);
+        free(secondMatrix);
 
         //c sub matrix build C again
         count = 0;
@@ -174,19 +155,11 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
             }
         }
 
-        //free(c11);
-        //free(c12);
-        //free(c21);
-        //free(c22);
-        //free(a11);
-        //free(a12);
-        //free(a21);
-        //free(a22);
-        //free(b11);
-        //free(b12);
-        //free(b21);
-        //free(b22);
-        
+        free(c11);
+        free(c12);
+        free(c21);
+        free(c22);
+
     }
     
 
