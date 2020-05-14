@@ -44,8 +44,23 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         int *m6 = (int *)malloc(size*sizeof(int));
         int *m7 = (int *)malloc(size*sizeof(int));
         //Matrix to store operations
-        int *firstMatrix = (int *)malloc(size*sizeof(int));
-        int *secondMatrix = (int *)malloc(size*sizeof(int));
+        //int *firstMatrix = (int *)malloc(size*sizeof(int));
+        //int *secondMatrix = (int *)malloc(size*sizeof(int));
+        int *firstM1 = (int *)malloc(size*sizeof(int));
+        int *secondM1 = (int *)malloc(size*sizeof(int));
+        int *firstM2 = (int *)malloc(size*sizeof(int));
+        int *firstM3 = (int *)malloc(size*sizeof(int));
+        int *firstM4 = (int *)malloc(size*sizeof(int));
+        int *firstM5 = (int *)malloc(size*sizeof(int));
+        int *firstM6 = (int *)malloc(size*sizeof(int));
+        int *secondM6 = (int *)malloc(size*sizeof(int));
+        int *firstM7 = (int *)malloc(size*sizeof(int));
+        int *secondM7 = (int *)malloc(size*sizeof(int));
+        int *firstC11 = (int *)malloc(size*sizeof(int));
+        int *secondC11 = (int *)malloc(size*sizeof(int));
+        int *firstC22 = (int *)malloc(size*sizeof(int));
+        int *secondC22 = (int *)malloc(size*sizeof(int));
+        
         //auxiliar count to fill the submatrix
         int count = 0;
         //build submatrix
@@ -70,41 +85,41 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         //Seven calls of Strassen
         //First call
         //m1 = (a11 + a22)(b11 + b22)
-        AddMatrix(a11, a22, firstMatrix, size);
-        AddMatrix(b11, b22, secondMatrix, size);
-        StrassenAlgorithm(firstMatrix, secondMatrix, m1, size, width);
+        AddMatrix(a11, a22, firstM1, size);
+        AddMatrix(b11, b22, secondM1, size);
+        StrassenAlgorithm(firstM1, secondM1, m1, size, width);
 
         //Second call
         //m2 = (a21 + a22)b11
-        AddMatrix(a21, a22, firstMatrix, size);
-        StrassenAlgorithm(firstMatrix, b11, m2, size, width);
+        AddMatrix(a21, a22, firstM2, size);
+        StrassenAlgorithm(firstM2, b11, m2, size, width);
 
         //Third call
         //m3 = a11(b12 - b22)
-        SubMatrix(b12, b22, firstMatrix, size);
-        StrassenAlgorithm(a11, firstMatrix, m3, size, width);
+        SubMatrix(b12, b22, firstM3, size);
+        StrassenAlgorithm(a11, firstM3, m3, size, width);
 
         //Fourth call
         //m4 = a22(b21 - b11)
-        SubMatrix(b21, b11, firstMatrix, size);
-        StrassenAlgorithm(a22, firstMatrix, m4, size, width);
+        SubMatrix(b21, b11, firstM4, size);
+        StrassenAlgorithm(a22, firstM4, m4, size, width);
 
         //Fifth call
         //m5 = (a11 + a12)b22
-        AddMatrix(a11, a12, firstMatrix, size);
-        StrassenAlgorithm(firstMatrix, b22, m5, size, width);
+        AddMatrix(a11, a12, firstM5, size);
+        StrassenAlgorithm(firstM5, b22, m5, size, width);
 
         //Sixth call
         //m6 = (a21 - a11)(b11 + b12)
-        SubMatrix(a21, a11, firstMatrix, size);
-        AddMatrix(b11, b12, secondMatrix, size);
-        StrassenAlgorithm(firstMatrix, secondMatrix, m6, size, width);
+        SubMatrix(a21, a11, firstM6, size);
+        AddMatrix(b11, b12, secondM6, size);
+        StrassenAlgorithm(firstM6, secondM6, m6, size, width);
 
         //Seventh call
         //m7 = (a12 - a22)(b21 + b22)
-        SubMatrix(a12, a22, firstMatrix, size);
-        AddMatrix(b21, b22, secondMatrix, size);
-        StrassenAlgorithm(firstMatrix, secondMatrix, m7, size, width);
+        SubMatrix(a12, a22, firstM7, size);
+        AddMatrix(b21, b22, secondM7, size);
+        StrassenAlgorithm(firstM7, secondM7, m7, size, width);
 
         free(a11);
         free(a12);
@@ -114,12 +129,22 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         free(b12);
         free(b21);
         free(b22);
+        free(firstM1);
+        free(secondM1);
+        free(firstM2);
+        free(firstM3);
+        free(firstM4);
+        free(firstM5);
+        free(firstM6);
+        free(secondM6);
+        free(firstM7);
+        free(secondM7);
 
         //Apply m's matrix to c submatrix
         //c11 = m1 + m4 - m5 + m7
-        AddMatrix(m1, m4, firstMatrix, size);
-        SubMatrix(firstMatrix, m5, secondMatrix, size);
-        AddMatrix(secondMatrix, m7, c11, size);
+        AddMatrix(m1, m4, firstC11, size);
+        SubMatrix(firstC11, m5, secondC11, size);
+        AddMatrix(secondC11, m7, c11, size);
 
         //c12 = m3 + m5
         AddMatrix(m3, m5, c12, size);
@@ -128,9 +153,9 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         AddMatrix(m2 , m4, c21, size);
 
         //c22 = m1 - m2 + m3 + m6
-        SubMatrix(m1, m2, firstMatrix, size);
-        AddMatrix(firstMatrix, m3, secondMatrix, size);        
-        AddMatrix(secondMatrix, m6, c22, size);
+        SubMatrix(m1, m2, firstC22, size);
+        AddMatrix(firstC22, m3, secondC22, size);        
+        AddMatrix(secondC22, m6, c22, size);
         
         
         free(m1);
@@ -140,8 +165,10 @@ void StrassenAlgorithm(int *A, int *B, int *C, int elements, int old_width){
         free(m5);
         free(m6);
         free(m7);
-        free(firstMatrix);
-        free(secondMatrix);
+        free(firstC11);
+        free(secondC11);
+        free(firstC22);
+        free(secondC22);
 
         //c sub matrix build C again
         count = 0;
