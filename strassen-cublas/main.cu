@@ -2,101 +2,115 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <cblas.h>
 #include <omp.h>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
 
 #define MATRIX_WIDTH 1024
 #define PRINT_LIMIT 64
+#define TOLERANCE 0.0001
 #include "tools.h"
 #include "strassen.h"
 
 
 int main(int argc, char **argv){
-    printf("\n\t********** Strassen Algorithm **********\n\n");
-    double timer;
-    if(argc != 5){
-        fprintf(stderr, "run as ./prog n nt print MIN_SIDE_MATRIX\n");
+    printf("\n\t********** GEMM Algorithm **********\n\n");
+    double t1, t2;
+    if(argc != 6){
+        fprintf(stderr, "run as ./prog dev n nstop nt alg\nalg:\n\
+    Classic             0\n\
+    Blocked             1\n\
+    CBLAS               2\n\
+    Strassen CUBLAS     3\n\n");
         exit(1);
     }
-    int width = atoi(argv[1]);
-    int nt = atoi(argv[2]);
-    int print = atoi(argv[3]);
-    int minside = atoi(argv[4]);
-    int total = width * width;
-    float *matrix_A = (float *)malloc(total * sizeof(float));
-    float *matrix_B = (float *)malloc(total * sizeof(float));
-    float *matrix_CStr = (float *)malloc(total * sizeof(float));
-    float *matrix_CNor = (float *)malloc(total * sizeof(float));
+    // 1) GET ARGS
+    int dev                 = atoi(argv[1]);
+    long n                  = atoi(argv[2]);
+    int nstop               = atoi(argv[3]);
+    int nt                  = atoi(argv[4]);
+    int alg                 = atoi(argv[5]);
+    long nelem              = n*n;
+    double TFLOP = 2.0*n*n*n*1E-12;
+    omp_set_num_threads(nt);
 
-    printf("Fill matrices A, B and C.............."); fflush(stdout);
-    fillElements(matrix_A, width, 20.f);
-    fillElements(matrix_B, width, 0.f);
-    constMatrix(matrix_CStr, width, 0);
-    constMatrix(matrix_CNor, width, 0);
-    printf("done\n"); fflush(stdout);
+
+
+
+    // 2) CREATE AND FILL A B C matrices
+    float *A = (float *)malloc(nelem * sizeof(float));
+    float *B = (float *)malloc(nelem * sizeof(float));
+    float *C = (float *)malloc(nelem * sizeof(float));
+    float *goldC = (float *)malloc(nelem * sizeof(float));
+    printf("Fill matrices A, B, C       "); fflush(stdout);
+    t1 = omp_get_wtime();
+    fillElements(A, n, 20.f);
+    fillElements(B, n, 0.f);
+    constMatrix(C, n, 0);
+    constMatrix(goldC, n, 0);
+    t2 = omp_get_wtime();
+    printf("done: %f secs\n", t2-t1); fflush(stdout);
     #ifdef DEBUG
-    if(print){
-        printMatrix(matrix_A, width, "mat A");
-        printMatrix(matrix_B, width, "mat B");
-    }
-    
-    //printMatrix(matrix_CStr, width, "Mat C (Strassen)");
-    //printMatrix(matrix_CNor, width, "Mat C (Classic)");
+    printMatrix(A, n, "mat A");
+    printMatrix(B, n, "mat B");
     #endif
     
+
+
+
+    // 3) MATMUL (STRASSEN AND CLASSIC)
     //omp_set_dynamic(0);
     //omp_set_nested(4);
     //omp_set_num_threads(4);
-
-    printf("Strassen Matmul......................."); fflush(stdout);
-    timer = omp_get_wtime();
-    #pragma omp parallel num_threads(nt)
-    {
-        #pragma omp single
-        {
-            StrassenAlgorithm(matrix_A, matrix_B, matrix_CStr, total, width, 0, minside);
-        }
+    printf("%-28s", algorithms[alg]); fflush(stdout);
+    t1 = omp_get_wtime();
+    switch(alg){
+        case 0:
+            MatmulBasic(A, B, C, n);
+            break;
+        case 1:
+            MatmulBlock(A, B, C, n);
+            break;
+        case 2:
+            MatmulCBLAS(A, B, C, n);
+            break;
+        case 3:
+            MatmulStrassenGPU(A, B, C, n, nstop);
+            break;
     }
-    
-    timer = omp_get_wtime() - timer;
-    printf("done: %f secs\n", timer); fflush(stdout);
-    
-    // (2) classic Matmul
-    printf("Classic Matmul........................"); fflush(stdout);
-    timer = omp_get_wtime();
-    #pragma omp parallel for num_threads(nt) 
-        for (int i = 0; i < width; ++i){   
-            for (int j = 0; j < width; ++j){
-                float acc=0;
-                for (int k = 0; k < width; ++k){
-                    acc += matrix_A[width*i + k] * matrix_B[width*k + j];
-                }
-                matrix_CNor[width*i + j] = acc;
-            }
-        }
-    timer = omp_get_wtime() - timer;
-    printf("done: %f secs\n", timer); fflush(stdout);
+    t2 = omp_get_wtime();
+    printf("done: %f secs (%f TFLOPS)\n", t2-t1, TFLOP/(t2-t1)); fflush(stdout);
 
-    // (3) verify Results
+
+
+
+
+    // 4) VERIFY RESULTS
+    printf("[GOLD] %-21s", algorithms[2]); fflush(stdout);
+    t1 = omp_get_wtime();
+    MatmulCBLAS(A, B, goldC, n);
+    t2 = omp_get_wtime();
+    printf("done: %f secs (%f TFLOPS)\n", t2-t1, TFLOP/(t2-t1)); fflush(stdout);
 #ifdef DEBUG
-    printf("\n");
-    if(print){
-        printMatrix(matrix_CStr, width, "Strassen Matmul");
-        printMatrix(matrix_CNor, width, "Classic Matmul");
-    }
-    
+    printMatrix(C, n, "mat C");
+    printMatrix(goldC, n, "mat goldC");
 #endif
-    printf("Verifying Strassen....................%s\n", VerifyResults(matrix_CStr, matrix_CNor, width) == true? "Pass" : "Fail");
-    float acc = 0.f;
-    int i, n = width;
-    for(i = 0; i < total; ++i){
-        if(matrix_CStr[i]==matrix_CNor[i]) acc++;
-    }
-    printf("Accuracy: %f\n", (acc/(total))*100);
-    // (4) cleanup
-    free(matrix_A);
-    free(matrix_B);
-    free(matrix_CStr);
-    free(matrix_CNor);
+    printf("Verify (TOL = %f)     ", TOLERANCE); fflush(stdout);
+    printf("%s\n", VerifyResults(C, goldC, n) ? "pass" : "fail"); fflush(stdout);
+    double accError = 0.0f;
+    #ifdef DEBUG
+        for(int i = 0; i < nelem; ++i){
+            accError += fabs(C[i] - goldC[i]);
+        }
+        printf("Accum Error: %f\n", accError);
+    #endif
+
+
+
+    // 5) CLEANUP
+    free(A);
+    free(B);
+    free(C);
+    free(goldC);
 }

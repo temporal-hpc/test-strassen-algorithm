@@ -1,5 +1,5 @@
-DEBUG=DEBUG
+DEBUG=no
 PARAMS= -fopenmp
 COMP= -Xcompiler
 all:
-	nvcc -lcublas -D${DEBUG} ${COMP} ${PARAMS} -O3 main.cu -o prog
+	nvcc -lcublas -lcblas -D${DEBUG} ${COMP} ${PARAMS} -O3 main.cu -o prog

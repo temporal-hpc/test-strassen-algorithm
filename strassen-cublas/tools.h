@@ -1,5 +1,10 @@
 #define bsize 8
 
+const char *algorithms[4] = {"Matmul Classic", "Matmul Blocked", "Matmul CBLAS", "Matmul Strassen CUBLAS"};
+
+
+void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int depth, int nstop);
+
 int getMove(){
     int ret = 0, sup=MATRIX_WIDTH;
     while(sup/2>=2){
@@ -11,7 +16,7 @@ int getMove(){
 
 // print matrix in 2D visual form
 void printMatrix(float *M, int n, const char *msg){
-    if(n > 64){ return; }
+    if(n > PRINT_LIMIT){ return; }
     printf("%s:\n", msg);
     for(int i = 0; i < n; ++i){
         for(int j = 0; j < n; ++j){
@@ -48,7 +53,6 @@ void AddMatrix(float *A, float *B, float *C, int size){
             C[i] = A[i] + B[i];
         }
     //}
-    
 }
 
 // C = A - B
@@ -59,29 +63,54 @@ void SubMatrix(float *A, float *B, float *C, int size){
             C[i] = A[i] - B[i];
         }
     //}
-    
 }
 
 // C = A x B
-
-void TrasposeMatrix(float *M, float *bt, int width){
-    
-    for(int i = 0; i < width; ++i){
-        for(int j = 0; j < width; ++j){
-            bt[width*j + i] = M[width* i + j];
+void TrasposeMatrix(float *M, float *bt, int n){
+    for(int i = 0; i < n; ++i){
+        for(int j = 0; j < n; ++j){
+            bt[n*j + i] = M[n* i + j];
         }
     }
 }
 
-void MatmulMatrix(float *A, float *B, float *C, int width){
+bool VerifyResults(float *C, float *goldC, int n){
+    for(int i = 0; i < n; ++i){
+        for(int j = 0; j < n; ++j){
+            long index = i*n + j;
+            if(fabs(goldC[index] - C[index])/goldC[index] > TOLERANCE){
+                #ifdef DEBUG
+                    fprintf(stderr, "Verify: error at C[i=%i, j=%i] = %f  !=   goldC[i=%i, j=%i] = %f\n", i, j, C[index], i, j, goldC[index]);
+                #endif
+                return false;
+            }
+        }
+    }   
+    return true;
+}
+
+void MatmulBasic(float *A, float *B, float *C, int n){
+    #pragma omp parallel for 
+    for (int i = 0; i < n; ++i){   
+        for (int j = 0; j < n; ++j){
+            float acc=0;
+            unsigned long q = n*i + j;
+            for (int k = 0; k < n; ++k){
+                acc += A[n*i + k] * B[n*k + j];
+            }
+            C[q] = acc;
+        }
+    }
+}
+
+void MatmulBlock(float *A, float *B, float *C, int n){
     //#pragma omp for
     //printf("HERE BLOCK MATMUL");
-    int n = width;
-    int num = width/bsize;
+    int num = n/bsize;
     float *bt = (float *)malloc(n*n*sizeof(float));
-    //printMatrix(B, width, "B");
-    TrasposeMatrix(B, bt, width);
-    //printMatrix(bt, width, "bt");
+    //printMatrix(B, n, "B");
+    TrasposeMatrix(B, bt, n);
+    //printMatrix(bt, n, "bt");
     //printf("HERE READY FOR BLOCK\n");
     for (int i = 0; i < num; ++i){
             for (int j = 0; j < num; ++j){
@@ -108,17 +137,17 @@ void MatmulMatrix(float *A, float *B, float *C, int width){
     free(bt);
 }
 
-bool VerifyResults(float *C1, float *C2, int n){
-    for(int i = 0; i < n; ++i){
-        for(int j = 0; j < n; ++j){
-            long index = i*n + j;
-            if(fabs(C1[index]-C2[index])>0.01){
-                #ifdef DEBUG
-                    fprintf(stderr, "Verify: error at A[i=%i, j=%i] = %f  !=   B[i=%i, j=%i] = %f\n", i, j, C1[index], i, j, C2[index]);
-                #endif
-                return false;
-            }
-        }
-    }   
-    return true;
+void MatmulCBLAS(float *A, float *B, float *C, long n){
+    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n, n, 1.0, A, n, B, n, 0, C, n);
 }
+
+void MatmulStrassenGPU(float *A, float *B, float *C, long n, long nstop){
+    #pragma omp parallel
+    {
+        #pragma omp single
+        {
+            StrassenAlgorithm(A, B, C, n*n, n, 0, nstop);
+        }
+    }
+}
+
