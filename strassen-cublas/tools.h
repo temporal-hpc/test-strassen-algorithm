@@ -1,9 +1,17 @@
 #define bsize 8
 
-const char *algorithms[4] = {"Matmul Classic", "Matmul Blocked", "Matmul CBLAS", "Matmul Strassen CUBLAS"};
+const char *algorithms[5] = {"Classic", "Blocked", "SGEMM CBLAS", "SGEMM CUBLAS", "Strassen+CUBLAS"};
+
+void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int depth, int nstop, cublasHandle_t &handle);
+
+void errChkCUBLAS(cublasStatus_t s, const char *msg){
+    if(s != CUBLAS_STATUS_SUCCESS){
+        printf("[CUBLAS] %s failed\n", msg);
+        exit(EXIT_FAILURE);
+    }
+}
 
 
-void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int depth, int nstop);
 
 int getMove(){
     int ret = 0, sup=MATRIX_WIDTH;
@@ -89,7 +97,9 @@ bool VerifyResults(float *C, float *goldC, int n){
     return true;
 }
 
-void MatmulBasic(float *A, float *B, float *C, int n){
+double MatmulBasic(float *A, float *B, float *C, int n){
+    double t1, t2;
+    t1 = omp_get_wtime();
     #pragma omp parallel for 
     for (int i = 0; i < n; ++i){   
         for (int j = 0; j < n; ++j){
@@ -101,9 +111,12 @@ void MatmulBasic(float *A, float *B, float *C, int n){
             C[q] = acc;
         }
     }
+    t2 = omp_get_wtime();
+    return t2-t1;
 }
 
-void MatmulBlock(float *A, float *B, float *C, int n){
+double MatmulBlock(float *A, float *B, float *C, int n){
+    double t1, t2;
     //#pragma omp for
     //printf("HERE BLOCK MATMUL");
     int num = n/bsize;
@@ -112,6 +125,7 @@ void MatmulBlock(float *A, float *B, float *C, int n){
     TrasposeMatrix(B, bt, n);
     //printMatrix(bt, n, "bt");
     //printf("HERE READY FOR BLOCK\n");
+    t1 = omp_get_wtime();
     for (int i = 0; i < num; ++i){
             for (int j = 0; j < num; ++j){
                 for (int k = 0; k < bsize; ++k){
@@ -134,20 +148,58 @@ void MatmulBlock(float *A, float *B, float *C, int n){
             }
         }
     //printf("HERE ENDED BLOCK\n");
+    t2 = omp_get_wtime();
     free(bt);
+    return t2-t1;
 }
 
-void MatmulCBLAS(float *A, float *B, float *C, long n){
+double MatmulCBLAS(float *A, float *B, float *C, long n){
+    double t1, t2;
+    t1 = omp_get_wtime();
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, n, n, n, 1.0, A, n, B, n, 0, C, n);
+    t2 = omp_get_wtime();
+    return t2-t1;
 }
 
-void MatmulStrassenGPU(float *A, float *B, float *C, long n, long nstop){
+double MatmulStrassenGPU(float *A, float *B, float *C, long n, long nstop, cublasHandle_t &handle){
+    double t1, t2;
+    t1 = omp_get_wtime();
     #pragma omp parallel
     {
         #pragma omp single
         {
-            StrassenAlgorithm(A, B, C, n*n, n, 0, nstop);
+            StrassenAlgorithm(A, B, C, n*n, n, 0, nstop, handle);
         }
     }
+    t2 = omp_get_wtime();
+    return t2-t1;
 }
 
+double MatmulCUBLAS(float *hA, float *hB, float *hC, long n, float *alpha, float *beta, cublasHandle_t &handle){
+    double t1, t2;
+    float *dA, *dB, *dC;
+    long nelem = n*n;
+    cublasStatus_t stat;
+    cudaMalloc((void**)&dA, nelem*sizeof(*hA));
+    cudaMalloc((void**)&dB, nelem*sizeof(*hB));
+    cudaMalloc((void**)&dC, nelem*sizeof(*hC)); 
+    stat = cublasSetMatrix(n, n, sizeof(*hA), hA, n, dA, n);
+    errChkCUBLAS(stat, "MatmulCUBLAS cublasSetMatrix hA -> dA");
+    stat = cublasSetMatrix(n, n, sizeof(*hB), hB, n, dB, n);
+    errChkCUBLAS(stat, "MatmulCUBLAS cublasSetMatrix hB -> dB");
+    stat = cublasSetMatrix(n, n, sizeof(*hC), hC, n, dC, n);
+    errChkCUBLAS(stat, "MatmulCUBLAS cublasSetMatrix hC -> dC");
+    t1 = omp_get_wtime();
+    //stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, alpha, dB, n, dA, n, beta, dC, n);
+    stat = cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, alpha,
+                          dB, CUDA_R_32F, n,
+                          dA, CUDA_R_32F, n,
+                          beta, dC, CUDA_R_32F, n, CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+    cudaDeviceSynchronize();
+    t2 = omp_get_wtime();
+    errChkCUBLAS(stat, "MatmulCUBLAS GemmEx");
+    //stat = cublasGetMatrix(n, n, sizeof(*hC), dC, n, hC, n);
+    stat = cublasGetVector(nelem, sizeof(*hC), dC, 1, hC, 1);
+    errChkCUBLAS(stat, "MatmulCUBLAS cublas copy dC -> hC");
+    return t2-t1;
+}

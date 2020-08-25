@@ -4,8 +4,9 @@
 #include <time.h>
 #include <cblas.h>
 #include <omp.h>
+#include <cuda.h>
 #include <cuda_runtime.h>
-#include "cublas_v2.h"
+#include <cublas_v2.h>
 
 #define MATRIX_WIDTH 1024
 #define PRINT_LIMIT 64
@@ -22,7 +23,8 @@ int main(int argc, char **argv){
     Classic             0\n\
     Blocked             1\n\
     CBLAS               2\n\
-    Strassen CUBLAS     3\n\n");
+    CUBLAS              3\n\
+    Strassen+CUBLAS     4\n\n");
         exit(1);
     }
     // 1) GET ARGS
@@ -33,7 +35,11 @@ int main(int argc, char **argv){
     int alg                 = atoi(argv[5]);
     long nelem              = n*n;
     double TFLOP = 2.0*n*n*n*1E-12;
+    float alpha=1.0f, beta=0.0f;
     omp_set_num_threads(nt);
+    cublasHandle_t handle;
+    cublasStatus_t stat = cublasCreate(&handle);   
+    errChkCUBLAS(stat, "create handle");
 
 
 
@@ -64,23 +70,25 @@ int main(int argc, char **argv){
     //omp_set_nested(4);
     //omp_set_num_threads(4);
     printf("%-28s", algorithms[alg]); fflush(stdout);
-    t1 = omp_get_wtime();
+    double rtime = 0;
     switch(alg){
         case 0:
-            MatmulBasic(A, B, C, n);
+            rtime = MatmulBasic(A, B, C, n);
             break;
         case 1:
-            MatmulBlock(A, B, C, n);
+            rtime = MatmulBlock(A, B, C, n);
             break;
         case 2:
-            MatmulCBLAS(A, B, C, n);
+            rtime = MatmulCBLAS(A, B, C, n);
             break;
         case 3:
-            MatmulStrassenGPU(A, B, C, n, nstop);
+            rtime = MatmulCUBLAS(A, B, C, n, &alpha, &beta, handle);
+            break;
+        case 4:
+            rtime = MatmulStrassenGPU(A, B, C, n, nstop, handle);
             break;
     }
-    t2 = omp_get_wtime();
-    printf("done: %f secs (%f TFLOPS)\n", t2-t1, TFLOP/(t2-t1)); fflush(stdout);
+    printf("done: %f secs (%f TFLOPS)\n", rtime, TFLOP/rtime); fflush(stdout);
 
 
 
@@ -98,8 +106,8 @@ int main(int argc, char **argv){
 #endif
     printf("Verify (TOL = %f)     ", TOLERANCE); fflush(stdout);
     printf("%s\n", VerifyResults(C, goldC, n) ? "pass" : "fail"); fflush(stdout);
-    double accError = 0.0f;
     #ifdef DEBUG
+        double accError = 0.0f;
         for(int i = 0; i < nelem; ++i){
             accError += fabs(C[i] - goldC[i]);
         }
@@ -113,4 +121,5 @@ int main(int argc, char **argv){
     free(B);
     free(C);
     free(goldC);
+    cublasDestroy(handle);
 }

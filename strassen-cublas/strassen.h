@@ -4,49 +4,56 @@
 //#define MINMATRIX MINSIDE*MINSIDE
 
 
-void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int depth, int nstop){
+void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int depth, int nstop, cublasHandle_t &handle){
     //printf("\nHere SEQ nelem: %i\n", nelem);
     if(n<=nstop){   
         //printf("IT (SEQ) SHOULD BE HERE\n");
         //For the minor case, its only a normal matrix multiplication
         //MatmulMatrix(A, B, C, 16);
         int MINMATRIX = nstop * nstop;
-        double start, end;
-        cublasHandle_t handle;
         cublasStatus_t stat;
         float *da, *db, *dc;
         float alpha = 1.0, beta = 0.0;
         cudaMalloc((void**)&da, MINMATRIX*sizeof(*A));
         cudaMalloc((void**)&db, MINMATRIX*sizeof(*B));
         cudaMalloc((void**)&dc, MINMATRIX*sizeof(*C)); 
-        start = omp_get_wtime();
-        stat = cublasCreate(&handle);   
-        stat = cublasSetMatrix(nstop,nstop,sizeof(*A),B,nstop, da, nstop);
-        stat = cublasSetMatrix(nstop,nstop,sizeof(*B),A,nstop, db, nstop);
+        #ifdef DEBUG
+            double start, end;
+            start = omp_get_wtime();
+        #endif
+        stat = cublasSetMatrix(nstop,nstop,sizeof(*A),A,nstop, da, nstop);
+        errChkCUBLAS(stat, "Strassen cublasSetMatrix A");
+        stat = cublasSetMatrix(nstop,nstop,sizeof(*B),B,nstop, db, nstop);
+        errChkCUBLAS(stat, "Strassen] cublasSetMatrix B");
         stat = cublasSetMatrix(nstop,nstop,sizeof(*C),C,nstop, dc, nstop);
-        end = omp_get_wtime();
+        errChkCUBLAS(stat, "Strassen cublasSetMatrix C");
         #ifdef DEBUG
-            printf("Allocation took: %f seconds\n", end - start);
+            end = omp_get_wtime();
+            printf("Allocation and Host->Dev copy of A,B,C took: %f seconds\n", end - start);
+            start = omp_get_wtime();
         #endif
 
-        start = omp_get_wtime();
-        stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, nstop, nstop, nstop, &alpha, da, nstop, db, nstop, &beta, dc, nstop);
-        end = omp_get_wtime();
+        #ifdef COLMAJOR_C
+            stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, nstop, nstop, nstop, &alpha, da, nstop, db, nstop, &beta, dc, nstop);
+        #else
+            stat = cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, nstop, nstop, nstop, &alpha, db, nstop, da, nstop, &beta, dc, nstop);
+        #endif
+            
         #ifdef DEBUG
-            printf("Operation took: %f seconds\n", end - start);
+            end = omp_get_wtime();
+            printf("CUBLAS SGEMM Operation took: %f seconds\n", end - start);
+            start = omp_get_wtime();
         #endif
 
-        start = omp_get_wtime();
         stat = cublasGetMatrix(nstop,nstop, sizeof(*C), dc, nstop, C, nstop);
-        end = omp_get_wtime();
         #ifdef DEBUG
-            printf("GetMatrix took: %f seconds\n", end - start);
+            end = omp_get_wtime();
+            printf("CUBLAS GetMatrix C took: %f seconds\n", end - start);
         #endif
 
         cudaFree(da);
         cudaFree(db);
         cudaFree(dc);
-        cublasDestroy(handle);
     }
     else{
         //printf("INITIALIZING SPLIT AND CONQUER, CALLING STRASSEN IN REGION(%i,%i)\n", wi, wj);
@@ -127,41 +134,41 @@ void StrassenAlgorithm(float *A, float *B, float *C, long nelem, long n, int dep
         //m1 = (a11 + a22)(b11 + b22)
         AddMatrix(a11, a22, firstM1, size);
         AddMatrix(b11, b22, secondM1, size);
-        StrassenAlgorithm(firstM1, secondM1, m1, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(firstM1, secondM1, m1, size, hn, depth + 1, nstop, handle);
 
         //Second call
         //m2 = (a21 + a22)b11
         AddMatrix(a21, a22, firstM2, size);
-        StrassenAlgorithm(firstM2, b11, m2, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(firstM2, b11, m2, size, hn, depth + 1, nstop, handle);
 
         //Third call
         //m3 = a11(b12 - b22)
         SubMatrix(b12, b22, firstM3, size);
-        StrassenAlgorithm(a11, firstM3, m3, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(a11, firstM3, m3, size, hn, depth + 1, nstop, handle);
 
         //Fourth call
         //m4 = a22(b21 - b11)
         SubMatrix(b21, b11, firstM4, size);
-        StrassenAlgorithm(a22, firstM4, m4, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(a22, firstM4, m4, size, hn, depth + 1, nstop, handle);
 
         //Fifth call
         //m5 = (a11 + a12)b22
         AddMatrix(a11, a12, firstM5, size);
-        StrassenAlgorithm(firstM5, b22, m5, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(firstM5, b22, m5, size, hn, depth + 1, nstop, handle);
         
 
         //Sixth call
         //m6 = (a21 - a11)(b11 + b12)
         SubMatrix(a21, a11, firstM6, size);
         AddMatrix(b11, b12, secondM6, size);
-        StrassenAlgorithm(firstM6, secondM6, m6, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(firstM6, secondM6, m6, size, hn, depth + 1, nstop, handle);
         
 
         //Seventh call
         //m7 = (a12 - a22)(b21 + b22)
         SubMatrix(a12, a22, firstM7, size);    
         AddMatrix(b21, b22, secondM7, size);  
-        StrassenAlgorithm(firstM7, secondM7, m7, size, hn, depth + 1, nstop);
+        StrassenAlgorithm(firstM7, secondM7, m7, size, hn, depth + 1, nstop, handle);
 
         free(a11);
         free(a12);
